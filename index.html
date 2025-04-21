@@ -1,0 +1,498 @@
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Offset Pie Pieces (24h)</title>
+          <!-- Using system UI fonts for a native Apple look -->
+          <style>
+            /* fill viewport, center clock, and use system fonts for Apple style */
+            body {
+              margin: 0;
+              height: 100vh;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            }
+            /* outer drop-shadow and inner inset shadow for depth */
+            canvas {
+              display: block;
+              border-radius: 50%;
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1), inset 0 0 20px rgba(0, 0, 0, 0.2);
+              background-color: transparent;
+            }
+            /* container to overlay canvas and image */
+            .clock-container {
+              position: relative;
+              display: inline-block;
+              width: 88vmin;
+              height: 88vmin;
+              max-width: 800px;
+              max-height: 800px;
+            }
+            /* make canvas fill the container */
+            .clock-container canvas {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              z-index: 1;
+            }
+            /* control panel at bottom, hidden by default */
+            #controlPanel {
+              position: fixed;
+              bottom: -100px;
+              left: 0;
+              width: 100%;
+              background: rgba(0, 0, 0, 0.5);
+              color: #fff;
+              z-index: 10;
+              padding: 10px 0;
+            }
+            #controlPanel.show {
+              bottom: 0;
+            }
+            /* dark mode styling for toolbar and handle */
+            #controlPanel.dark {
+              /* light translucent background, white labels */
+              background: rgba(255, 255, 255, 0.35);
+              color: #fff;
+            }
+            /* dark mode styling for toolbar and handle */
+            #controlPanel.dark {
+              /* light translucent background, white labels */
+              background: rgba(255, 255, 255, 0.35);
+              color: #fff;
+            }
+            #controlHandle.dark {
+              background: rgba(255, 255, 255, 0.35);
+            }
+            #controlHandle.dark::before,
+            #controlHandle.dark::after {
+              background: #000;
+            }
+            /* handle lip to reveal panel */
+            #controlHandle {
+              position: fixed;
+              bottom: 0;
+              left: 50%;
+              transform: translateX(-50%);
+              width: 60px;
+              height: 20px;
+              background: rgba(0, 0, 0, 0.5);
+              border-radius: 10px 10px 0 0;
+              cursor: pointer;
+              z-index: 11;
+            }
+            /* lines on the handle */
+            #controlHandle::before,
+            #controlHandle::after {
+              content: '';
+              position: absolute;
+              left: 50%;
+              transform: translateX(-50%);
+              width: 30px;
+              height: 2px;
+              background: #fff;
+              border-radius: 1px;
+            }
+            #controlHandle::before {
+              top: 6px;
+            }
+            #controlHandle::after {
+              top: 12px;
+            }
+            /* toggle switch styling */
+            .switch {
+              position: relative;
+              display: inline-block;
+              width: 50px;
+              height: 24px;
+              margin-right: 10px;
+            }
+            .switch input {
+              opacity: 0;
+              width: 0;
+              height: 0;
+            }
+            .slider {
+              position: absolute;
+              cursor: pointer;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background-color: #ccc;
+              transition: 0.4s;
+              border-radius: 24px;
+            }
+            .slider:before {
+              position: absolute;
+              content: '';
+              height: 20px;
+              width: 20px;
+              left: 2px;
+              bottom: 2px;
+              background-color: white;
+              transition: 0.4s;
+              border-radius: 50%;
+            }
+            .switch input:checked + .slider {
+              background-color: #2196F3;
+            }
+            .switch input:checked + .slider:before {
+              /* position knob at right end, accounting for 2px margins and 20px width */
+              left: calc(100% - 22px);
+            }
+            .label-text {
+              font-size: 16px;
+            }
+            /* container for toggle switches */
+            .toggles {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              gap: 40px;
+            }
+            .toggles > div {
+              display: flex;
+              align-items: center;
+            }
+            .controlFooter {
+              font-size: 12px;
+              text-align: center;
+              margin-top: 16px;
+              opacity: 0.7;
+            }
+            .controlFooter a {
+              color: #fcc;
+              text-decoration: underline;
+            }
+          </style>
+        </head>
+        <body>
+
+        <div class="clock-container">
+          <canvas id="myCanvas"></canvas>
+        </div>
+        <!-- control panel -->
+        <div id="controlPanel">
+          <div class="toggles">
+            <div>
+              <label class="switch">
+                <input type="checkbox" id="modeSwitch">
+                <span class="slider"></span>
+              </label>
+              <span class="label-text" id="modeLabel">Dark</span>
+            </div>
+            <div>
+              <label class="switch">
+                <input type="checkbox" id="demoSwitch">
+                <span class="slider"></span>
+              </label>
+              <span class="label-text" id="demoLabel">Demo</span>
+            </div>
+            <div>
+              <label class="switch">
+                <input type="checkbox" id="formatSwitch">
+                <span class="slider"></span>
+              </label>
+              <span class="label-text" id="formatLabel">24h</span>
+            </div>
+          </div>
+          <div class="controlFooter">
+            Concept Copyright (c) 1991-2025 by <a href="https://ai-created.com/" target="_blank">Marco van Hylckama Vlieg</a>
+          </div>
+            </div>
+          <div id="controlHandle"></div>
+        </div>
+
+        <script>
+          window.onload = function() {
+            // load overlay image for the 4-segment mask
+            const overlayImage = new Image();
+            let overlayLoaded = false;
+            overlayImage.onload = function() { overlayLoaded = true; };
+            overlayImage.src = 'mask.png';
+            const canvas = document.getElementById('myCanvas');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const cssWidth = canvas.clientWidth;
+            const cssHeight = canvas.clientHeight;
+            canvas.width = cssWidth * dpr;
+            canvas.height = cssHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            const cx = cssWidth / 2;
+            const cy = cssHeight / 2;
+            const wedgeCount = 4;
+            const wedgeAngle = 2 * Math.PI / 6;
+            // Radius scaled to fit viewport with extra margin
+            // outer ring adds ~15% around the wheel, so divide by 1.15, then reduce by ~12% (0.88) for padding
+            const radius = (Math.min(cx, cy) / 1.15) * 0.88;
+            const offset = 0;
+            // Configurable colors
+            let bgColor = '#ffffff';
+            // 12h and 24h color sets: 12h uses the first three base colors
+            const colors12 = ['#FF3B30', '#FF9500', '#FFCC00'];
+            const colors24 = ['#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#5856D6'];
+            let segmentColors = colors12;
+            let ringColor = '#CCCCCC';
+            let textColor = '#333333';
+            let dotColor = '#333333';
+
+            // apply background color
+            document.body.style.backgroundColor = bgColor;
+            canvas.style.backgroundColor = bgColor;
+
+            // 6-part wheel: colors defined in segmentColors variable above
+            // each wedge has a base segment index
+            const segmentIndices = [0, 0, 0, 0];
+            // order to animate: top, right, bottom, left (indexes 3,0,1,2)
+            const pieceOrder = [3, 0, 1, 2];
+            let currentPieceOrderIndex = 0;
+            let animationStartTime = null;
+            // demo mode variables
+            let demoMode = false;
+            // format (12h/24h) mode variable
+            let is24h = false;
+            let demoStartTime = 0;
+            let demoStartDate = new Date();
+            const normalAnimationDuration = 3600000; // ms per transition (1 hour)
+            const demoAnimationDuration = 6000;      // ms per segment in demo
+            let animationDuration = normalAnimationDuration;
+            // reset clock based on real time
+            function resetRealTimeClock() {
+              const now = new Date();
+              const completed = now.getHours();
+              const fullCycles = Math.floor(completed / wedgeCount);
+              const remainder = completed % wedgeCount;
+              for (let i = 0; i < wedgeCount; i++) {
+                const updates = fullCycles + pieceOrder.slice(0, remainder).filter(p => p === i).length;
+                segmentIndices[i] = updates % segmentColors.length;
+              }
+              currentPieceOrderIndex = completed % wedgeCount;
+              const perfNow = performance.now();
+              const fraction = (now.getMinutes() * 60 + now.getSeconds() + now.getMilliseconds() / 1000) / 3600;
+              animationStartTime = perfNow - fraction * animationDuration;
+            }
+            // reset clock for demo mode starting at 12:00
+            function resetDemoClock() {
+              // start demo at midnight (0 hours)
+              const completed = 0;
+              const fullCycles = Math.floor(completed / wedgeCount);
+              const remainder = completed % wedgeCount;
+              for (let i = 0; i < wedgeCount; i++) {
+                const updates = fullCycles + pieceOrder.slice(0, remainder).filter(p => p === i).length;
+                segmentIndices[i] = updates % segmentColors.length;
+              }
+              currentPieceOrderIndex = completed % wedgeCount;
+              demoStartTime = performance.now();
+              demoStartDate = new Date(); demoStartDate.setHours(0,0,0,0);
+              // reset wedge animation timer for demo
+              animationStartTime = demoStartTime;
+            }
+            // initial real-time start
+            resetRealTimeClock();
+
+            // draw and animate wedges with partial color overlay
+            function animate(time) {
+              if (animationStartTime === null) animationStartTime = time;
+              const elapsed = time - animationStartTime;
+              const progress = Math.min(elapsed / animationDuration, 1);
+              ctx.clearRect(0, 0, cssWidth, cssHeight);
+              // draw outer ring (black border 10% of wheel radius, with 10% gap)
+              {
+                const ringWidth = radius * 0.1;
+                const ringGap = radius * 0.1;  // space between segments and ring
+                const ringRadius = radius + ringGap + ringWidth / 2;
+                ctx.beginPath();
+                ctx.arc(cx, cy, ringRadius, 0, 2 * Math.PI);
+                ctx.lineWidth = ringWidth;
+                ctx.strokeStyle = ringColor;
+                ctx.stroke();
+              }
+              const piece = pieceOrder[currentPieceOrderIndex];
+              for (let i = 0; i < wedgeCount; i++) {
+                const dir = i * (2 * Math.PI / wedgeCount);
+                const ax = cx + offset * Math.cos(dir);
+                const ay = cy + offset * Math.sin(dir);
+                const startAngle = dir - wedgeAngle / 2;
+                // base color
+                const baseColor = segmentColors[segmentIndices[i]];
+                ctx.beginPath();
+                ctx.moveTo(ax, ay);
+                ctx.lineTo(
+                  ax + radius * Math.cos(startAngle),
+                  ay + radius * Math.sin(startAngle)
+                );
+                ctx.arc(ax, ay, radius, startAngle, startAngle + wedgeAngle);
+                ctx.closePath();
+                ctx.fillStyle = baseColor;
+                ctx.fill();
+                // overlay transition for current piece
+                if (i === piece) {
+                  const nextColor = segmentColors[(segmentIndices[i] + 1) % segmentColors.length];
+                  const midAngle = startAngle + wedgeAngle * progress;
+                  ctx.beginPath();
+                  ctx.moveTo(ax, ay);
+                  ctx.lineTo(
+                    ax + radius * Math.cos(startAngle),
+                    ay + radius * Math.sin(startAngle)
+                  );
+                  ctx.arc(ax, ay, radius, startAngle, midAngle);
+                  ctx.closePath();
+                  ctx.fillStyle = nextColor;
+                  ctx.fill();
+                }
+              }
+              // carve central hole (20% of radius)
+              ctx.save();
+              ctx.globalCompositeOperation = 'destination-out';
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius * 0.20, 0, 2 * Math.PI);
+              ctx.fill();
+              ctx.restore();
+              // center text: demo mode digital, otherwise AM/PM (only in 12h)
+              if (demoMode) {
+                // simulated time in demo: start at 12:00, speed 1h per 6s
+                const elapsedDemoMs = time - demoStartTime;
+                const cycleMs = is24h ? 24 * 3600 * 1000 : 12 * 3600 * 1000;
+                const simMsTotal = elapsedDemoMs * 600;
+                const simDate = new Date(demoStartDate.getTime() + (simMsTotal % cycleMs));
+                let hours = simDate.getHours();
+                if (!is24h) {
+                  hours = hours % 12;
+                  if (hours === 0) hours = 12;
+                }
+                const m = simDate.getMinutes();
+                const pad = n => n < 10 ? '0' + n : n;
+                const timeStr = `${pad(hours)}:${pad(m)}`;
+                ctx.fillStyle = textColor;
+                ctx.font = `${radius * 0.10}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(timeStr, cx, cy);
+              } else if (!is24h) {
+                // draw AM/PM indicator in 12h mode
+                const nowHour = new Date().getHours();
+                const ampm = nowHour < 12 ? 'AM' : 'PM';
+                ctx.fillStyle = textColor;
+                ctx.font = `${radius * 0.10}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(ampm, cx, cy);
+              }
+              // draw seconds indicator (hidden in demo mode)
+              if (!demoMode) {
+                const nowSec = new Date();
+                const seconds = nowSec.getSeconds();
+                const angle = 2 * Math.PI * (seconds / 60) - Math.PI / 2;
+                const ringWidth = radius * 0.1;
+                const ringGap = radius * 0.1;
+                const orbitRadius = radius + ringGap + ringWidth / 2;
+                const circleR = ringWidth * 0.3;
+                const sx = cx + orbitRadius * Math.cos(angle);
+                const sy = cy + orbitRadius * Math.sin(angle);
+                ctx.beginPath();
+                ctx.arc(sx, sy, circleR, 0, 2 * Math.PI);
+                ctx.fillStyle = dotColor;
+                ctx.fill();
+              }
+              if (overlayLoaded) {
+                // draw the mask only over the wedge area (centered with radius)
+                ctx.drawImage(
+                  overlayImage,
+                  cx - radius,
+                  cy - radius,
+                  radius * 2,
+                  radius * 2
+                );
+              }
+              if (progress < 1) {
+                requestAnimationFrame(animate);
+              } else {
+                // commit transition
+                const piece = pieceOrder[currentPieceOrderIndex];
+                segmentIndices[piece] = (segmentIndices[piece] + 1) % segmentColors.length;
+                currentPieceOrderIndex = (currentPieceOrderIndex + 1) % pieceOrder.length;
+                animationStartTime = null;
+                requestAnimationFrame(animate);
+              }
+            }
+
+            // start animation
+            requestAnimationFrame(animate);
+            // control panel behavior
+            const panel = document.getElementById('controlPanel');
+            // toggle panel via handle click (for desktop/mobile)
+            const handle = document.getElementById('controlHandle');
+            handle.addEventListener('click', () => {
+              // toggle panel visibility
+              const isOpen = panel.classList.toggle('show');
+              // sync dark mode styling
+              handle.classList.toggle('dark', modeSwitch.checked);
+              // reposition handle to sit flush with panel or bottom
+              if (isOpen) {
+                const panelHeight = panel.getBoundingClientRect().height;
+                handle.style.bottom = panelHeight + 'px';
+              } else {
+                handle.style.bottom = '0px';
+              }
+            });
+            // hide panel when tapping outside of it or the handle
+            // hide panel when clicking/tapping outside of it or the handle
+            document.addEventListener('click', (e) => {
+              if (!panel.contains(e.target) && !handle.contains(e.target)) {
+                panel.classList.remove('show');
+                // reset handle to bottom
+                handle.style.bottom = '0px';
+              }
+            });
+            const modeSwitch = document.getElementById('modeSwitch');
+            modeSwitch.addEventListener('change', () => {
+              // apply dark mode styles to panel and handle
+              panel.classList.toggle('dark', modeSwitch.checked);
+              handle.classList.toggle('dark', modeSwitch.checked);
+              if (modeSwitch.checked) {
+                bgColor = '#000000';
+                textColor = '#ffffff';
+                // seconds indicator circle black in dark mode
+                dotColor = '#000000';
+              } else {
+                bgColor = '#ffffff';
+                textColor = '#333333';
+                dotColor = '#333333';
+              }
+              document.body.style.backgroundColor = bgColor;
+              canvas.style.backgroundColor = bgColor;
+            });
+            // demo mode toggle
+            const demoSwitch = document.getElementById('demoSwitch');
+            demoSwitch.addEventListener('change', () => {
+              demoMode = demoSwitch.checked;
+              if (demoMode) {
+                animationDuration = demoAnimationDuration;
+                resetDemoClock();
+              } else {
+                animationDuration = normalAnimationDuration;
+                resetRealTimeClock();
+              }
+            });
+            // 12h/24h format toggle
+            const formatSwitch = document.getElementById('formatSwitch');
+            formatSwitch.addEventListener('change', () => {
+              is24h = formatSwitch.checked;
+              // swap color sets
+              segmentColors = is24h ? colors24 : colors12;
+              // reset clock after format change
+              if (demoMode) resetDemoClock(); else resetRealTimeClock();
+            });
+          };
+        </script>
+
+        </body>
+        </html>
+
